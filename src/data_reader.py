@@ -19,6 +19,8 @@ class LogReader(object):
     def __init__(self, input, start_timeformat, end_timeformat, log_columns_numbers=[], ns_include=True,
                  one_timestamp=False):
         """constructor"""
+        if not log_columns_numbers:
+            log_columns_numbers = []
         self.input = input
         self.data, self.raw_data = self.load_data_from_file(log_columns_numbers, start_timeformat, end_timeformat,
                                                             ns_include, one_timestamp)

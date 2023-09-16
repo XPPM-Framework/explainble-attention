@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 
 import keras.layers as L
-import keras.utils as ku
 import pandas as pd
 import tensorflow as tf
 from keras import backend as K
@@ -14,61 +13,23 @@ from keras.models import Model
 from keras.optimizers import Nadam, Adam, SGD, Adagrad
 from keras.regularizers import l2
 
-from data_reader import LogReader, read_resource_pool
-from nn_support import reduce_loops, split_train_test, add_calculated_features, vectorization, create_index
-from util import create_json, create_csv_file_header
+from data_reader import LogReader
+from nn_support import reduce_loops, split_train_test, add_calculated_features, create_index
+from util import create_json, read_json, create_csv_file_header, get_parameter_path
+from data_preparation import preprocess_dataframe
 
 # tf.disable_v2_behavior()
 
 MY_WORKSPACE_DIR = os.getenv("MY_WORKSPACE_DIR", "BPIC_Data/")
 
 
-def training_model(log: LogReader, timeformat: str, args: dict, *, no_loops=False):
+def training_model(log_df: pd.DataFrame, args: dict, *, no_loops: bool = False):
     """Main method of the training module.
-    Args:
-        timeformat (str): event-log date-time format.
-        args (dict): parameters for training the network.
-        no_loops (boolean): remove loops fom the event-log (optional).
+    :param log_df: The event log as a dataframe.
+    :param args: Parameters for training the network.
+    :param no_loops: Whether to remove loops fom the event-log (optional).
     """
-    parameters = dict()
-    # read the logfile
-    _, resource_table = read_resource_pool(log, sim_percentage=0.50)
-    # Role discovery
-    log_df_resources = pd.DataFrame.from_records(resource_table)
-    log_df_resources = log_df_resources.rename(index=str, columns={"resource": "user"})
-    # Dataframe creation
-    log_df = pd.DataFrame.from_records(log.data)
-    log_df = log_df.merge(log_df_resources, on='user', how='left')
-    log_df = log_df[log_df.task != 'Start']
-    log_df = log_df[log_df.task != 'End']
-    log_df = log_df.reset_index(drop=True)
-
-    if no_loops:
-        log_df = reduce_loops(log_df)
-    # Index creation
-    ac_index = create_index(log_df, 'task')
-    ac_index['start'] = 0
-    ac_index['end'] = len(ac_index)
-    index_ac = {v: k for k, v in ac_index.items()}
-
-    rl_index = create_index(log_df, 'role')
-    rl_index['start'] = 0
-    rl_index['end'] = len(rl_index)
-    index_rl = {v: k for k, v in rl_index.items()}
-
-    # Load embedded matrix
-    ac_weights = ku.to_categorical(sorted(index_ac.keys()), len(ac_index))
-    print('AC_WEIGHTS', ac_weights)
-    rl_weights = ku.to_categorical(sorted(index_rl.keys()), len(rl_index))
-    print('RL_WEIGHTS', rl_weights)
-
-    # Calculate relative times
-    log_df = add_calculated_features(log_df, ac_index, rl_index)
-    # Split validation datasets
-    log_df_train, log_df_test = split_train_test(log_df, 0.3)  # 70%/30%
-    # Input vectorization
-    vec = vectorization(log_df_train, ac_index, rl_index, args)
-    # print(vec['prefixes']['x_ac_inp'])
+    vec, index_ac, index_rl, ac_weights, rl_weights = preprocess_dataframe(log_df, no_loops=no_loops, **args)
 
     # Parameters export
     output_folder = os.path.join(args['folder'])
@@ -77,28 +38,34 @@ def training_model(log: LogReader, timeformat: str, args: dict, *, no_loops=Fals
         os.makedirs(output_folder)
         os.makedirs(os.path.join(output_folder, 'parameters'))
 
+    # Create test set csv file
+    # Split validation datasets
+    """
+    log_df_train, log_df_test = split_train_test(log_df, 0.3)  # 70%/30%
+    create_csv_file_header(log_df_test.to_dict('records'),
+                           os.path.join(output_folder,
+                                        'parameters',
+                                        args['log_name'] + 'test_log.csv'))
+    """
+
+    # Create json file with the used training prameters
+    parameters_path = get_parameter_path(args['model_path'])
+    parameters = read_json(parameters_path)
     parameters['event_log'] = args['file_name']
     parameters['exp_desc'] = args
     parameters['index_ac'] = index_ac
     parameters['index_rl'] = index_rl
     parameters['dim'] = dict(samples=str(vec['prefixes']['x_ac_inp'].shape[0]),
                              time_dim=str(vec['prefixes']['x_ac_inp'].shape[1]),
-                             features=str(len(ac_index)))
+                             features=str(len(index_ac.items())))
     parameters['mean_tbtw'] = vec['mean_tbtw']
     parameters['std_tbtw'] = vec['std_tbtw']
 
-    create_json(parameters, os.path.join(output_folder,
-                                         'parameters',
-                                         args['log_name'] + 'model_parameters.json'))
+    create_json(parameters, get_parameter_path(model_path=args['model_path']))
 
     # pickle.dump(vec, open( os.path.join(output_folder,
     #                                        'parameters',
     #                                    args['log_name']+'train_vec.pkl'), "wb"))
-
-    create_csv_file_header(log_df_test.to_dict('records'),
-                           os.path.join(output_folder,
-                                        'parameters',
-                                        args['log_name'] + 'test_log.csv'))
 
     if args['task'] == 'prefix_attn':
         model = training_model_temporal(vec, ac_weights, rl_weights, output_folder, args)

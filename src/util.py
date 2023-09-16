@@ -3,7 +3,10 @@ import datetime
 import json
 import os
 import uuid
+from pathlib import Path
 from sys import stdout
+from typing import Union
+import numpy as np
 
 
 def folder_id():
@@ -39,6 +42,14 @@ def ffloat(num, dec):
     return float("{0:.2f}".format(np.round(num, decimals=dec)))
 
 
+def get_parameter_path(model_path: Path) -> Path:
+    """
+    Get the path to the model-parameter.json file next to the model.
+    """
+    model_path = Path(model_path)
+    return model_path.with_name(f"{model_path.stem}-parameters.json")
+
+
 # transform a string into date object
 # def get_time_obj(date, timeformat):
 #    date_modified = datetime.datetime.strptime(date,timeformat)
@@ -67,6 +78,11 @@ def create_csv_file_header(index, output_file, mode='w'):
 def create_json(dictionary, output_file):
     with open(output_file, 'w') as f:
         f.write(json.dumps(dictionary))
+
+
+def read_json(file_path: Union[Path, str]) -> dict:
+    with open(file_path, 'r') as f:
+        return json.load(f)
 
 
 # rounding lists values preserving the sum values

@@ -136,36 +136,37 @@ def add_calculated_features(log_df, ac_index, rl_index):
     log_df['tbtw'] = 0
     log_df['tbtw_norm'] = 0
 
-    log_df = log_df.to_dict('records')
+    log_dict = log_df.to_dict('records')
 
-    log_df = sorted(log_df, key=lambda x: (x['caseid'], x['end_timestamp']))
-    for _, group in itertools.groupby(log_df, key=lambda x: x['caseid']):
+    log_dict = sorted(log_dict, key=lambda x: (x['caseid'], x['end_timestamp']))
+    for _, group in itertools.groupby(log_dict, key=lambda x: x['caseid']):
         trace = list(group)
         for i, _ in enumerate(trace):
             if i != 0:
                 trace[i]['tbtw'] = (trace[i]['end_timestamp'] -
                                     trace[i - 1]['end_timestamp']).total_seconds()
 
-    return pd.DataFrame.from_records(log_df)
+    return pd.DataFrame.from_records(log_dict)
 
 
-def vectorization(log_df, ac_index, rl_index, args):
+def vectorization(log_df: pd.DataFrame, ac_index: dict, rl_index: dict, norm_method: str, n_size: int, **kwargs):
     """Example function with types documented in the docstring.
     Args:
         log_df (dataframe): event log data.
         ac_index (dict): index of activities.
         rl_index (dict): index of roles.
-        args (dict): parameters for training the network
+        norm_method (str): What normalization method to use. 'max' or 'lognorm'.
+        n_size (int): The n-gram size
     Returns:
         dict: Dictionary that contains all the LSTM inputs.
     """
-    if args['norm_method'] == 'max':
+    if norm_method == 'max':
         mean_tbtw = np.mean(log_df.tbtw)
         std_tbtw = np.std(log_df.tbtw)
         norm = lambda x: (x['tbtw'] - mean_tbtw) / std_tbtw
         log_df['tbtw_norm'] = log_df.apply(norm, axis=1)
         log_df = reformat_events(log_df, ac_index, rl_index)
-    elif args['norm_method'] == 'lognorm':
+    elif norm_method == 'lognorm':
         logit = lambda x: math.log1p(x['tbtw'])
         log_df['tbtw_log'] = log_df.apply(logit, axis=1)
         mean_tbtw = np.mean(log_df.tbtw_log)
@@ -173,15 +174,18 @@ def vectorization(log_df, ac_index, rl_index, args):
         norm = lambda x: (x['tbtw_log'] - mean_tbtw) / std_tbtw
         log_df['tbtw_norm'] = log_df.apply(norm, axis=1)
         log_df = reformat_events(log_df, ac_index, rl_index)
+    else:
+        raise ValueError(f"Invalid parameter 'norm_method' {norm_method}")
+    args = dict()
 
     vec = {'prefixes': dict(), 'next_evt': dict(), 'mean_tbtw': mean_tbtw, 'std_tbtw': std_tbtw}
     # n-gram definition
     for i, _ in enumerate(log_df):
-        ac_n_grams = list(ngrams(log_df[i]['ac_order'], args['n_size'],
+        ac_n_grams = list(ngrams(log_df[i]['ac_order'], n_size,
                                  pad_left=True, left_pad_symbol=0))
-        rl_n_grams = list(ngrams(log_df[i]['rl_order'], args['n_size'],
+        rl_n_grams = list(ngrams(log_df[i]['rl_order'], n_size,
                                  pad_left=True, left_pad_symbol=0))
-        tn_grams = list(ngrams(log_df[i]['tbtw'], args['n_size'],
+        tn_grams = list(ngrams(log_df[i]['tbtw'], n_size,
                                pad_left=True, left_pad_symbol=0))
         st_idx = 0
         if i == 0:
