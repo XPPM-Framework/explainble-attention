@@ -1,8 +1,10 @@
+import asyncio
 import csv
 import datetime
 import json
 import os
 import uuid
+from logging import Logger
 from pathlib import Path
 from sys import stdout
 from typing import Union
@@ -50,6 +52,13 @@ def get_parameter_path(model_path: Path) -> Path:
     return model_path.with_name(f"{model_path.stem}-parameters.json")
 
 
+def get_results_path(model_path: Path) -> Path:
+    """
+    Get the path to folder to which to write the results of a prediction/explanation run.
+    """
+    return Path(model_path).parent
+
+
 # transform a string into date object
 # def get_time_obj(date, timeformat):
 #    date_modified = datetime.datetime.strptime(date,timeformat)
@@ -66,6 +75,7 @@ def create_csv_file(index, output_file, mode='w'):
 
 
 def create_csv_file_header(index, output_file, mode='w'):
+    Path(output_file).parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, mode, newline='') as f:
         fieldnames = index[0].keys()
         w = csv.DictWriter(f, fieldnames)
@@ -97,9 +107,8 @@ def round_preserve(l, expected_sum):
     return l
 
 
-## added code to save figure
-def plot_history(plt, figure_name, path, save_fig=True):
+def plot_history(plt, figure_name, path: Union[Path, str], save_fig=True):
     fig_name = figure_name + ".png"
-    full_path = path + fig_name
+    full_path = Path(path) / fig_name
     if save_fig:
         plt.savefig(full_path, dpi=300)

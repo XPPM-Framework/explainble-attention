@@ -1,6 +1,9 @@
 # Saved models
 *.h5
 
+# outputs
+**/output_files
+
 # Uncompressed data
 *.xes
 

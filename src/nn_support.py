@@ -118,7 +118,9 @@ def max_de_std(val, max_value, min_value):
     return true_value
 
 
-def add_calculated_features(log_df, ac_index, rl_index):
+def add_calculated_features(log_df, ac_index, rl_index,
+                            *, activity_key: str = 'task', case_id_key: str = 'caseid',
+                            timestamp_key: str = 'end_timestamp'):
     """Appends the indexes and relative time to the dataframe.
     Args:
         log_df: dataframe.
@@ -127,7 +129,7 @@ def add_calculated_features(log_df, ac_index, rl_index):
     Returns:
         Dataframe: The dataframe with the calculated features added.
     """
-    ac_idx = lambda x: ac_index[x['task']]
+    ac_idx = lambda x: ac_index[x[activity_key]]
     log_df['ac_index'] = log_df.apply(ac_idx, axis=1)
 
     rl_idx = lambda x: rl_index[x['role']]
@@ -138,13 +140,13 @@ def add_calculated_features(log_df, ac_index, rl_index):
 
     log_dict = log_df.to_dict('records')
 
-    log_dict = sorted(log_dict, key=lambda x: (x['caseid'], x['end_timestamp']))
-    for _, group in itertools.groupby(log_dict, key=lambda x: x['caseid']):
+    log_dict = sorted(log_dict, key=lambda x: (x[case_id_key], x[timestamp_key]))
+    for _, group in itertools.groupby(log_dict, key=lambda x: x[case_id_key]):
         trace = list(group)
         for i, _ in enumerate(trace):
             if i != 0:
-                trace[i]['tbtw'] = (trace[i]['end_timestamp'] -
-                                    trace[i - 1]['end_timestamp']).total_seconds()
+                trace[i]['tbtw'] = (trace[i][timestamp_key] -
+                                    trace[i - 1][timestamp_key]).total_seconds()
 
     return pd.DataFrame.from_records(log_dict)
 

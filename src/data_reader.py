@@ -5,7 +5,11 @@ import xml.etree.ElementTree as ET
 import gzip
 import zipfile as zf
 import os
+from pathlib import Path
+from typing import Union
 
+import pandas as pd
+import pm4py
 from tqdm import tqdm
 
 from util import file_size
@@ -24,6 +28,9 @@ class LogReader(object):
         self.input = input
         self.data, self.raw_data = self.load_data_from_file(log_columns_numbers, start_timeformat, end_timeformat,
                                                             ns_include, one_timestamp)
+
+    def to_dataframe(self):
+        return pd.DataFrame.from_records(self.data)
 
     # Support Method
     def define_ftype(self):
@@ -285,6 +292,7 @@ class LogReader(object):
         """seting method for the data attribute"""
         self.data = data
 
+# Data Reader specific utils
 
 import scipy
 from scipy.stats import pearsonr
@@ -393,89 +401,50 @@ def role_definition(sub_graphs, users):
     return records, resource_table
 
 
-# --kernel--
+def ensure_xes_standard_naming(log_df: pd.DataFrame, log_parameter) -> pd.DataFrame:
+    """
+    Ensures that naming conventions of the XES standard are adhered to.
+    \nThis includes adding a "life_cycle:transition" column should it not exist. This defaults to complete.
+    :param log_df:
+    :param log_parameter: Specifically mappings for names of certain column keys.
+    :return:
+    """
+    import pm4py.util.xes_constants as xes_const
 
-def role_discovery(data, drawing, sim_percentage):
-    tasks = list(set(list(map(lambda x: x[0], data))))
-    try:
-        tasks.remove('Start')
-    except Exception:
-        pass
-    tasks = [dict(index=i, data=tasks[i]) for i in range(0, len(tasks))]
-    users = list(set(list(map(lambda x: x[1], data))))
-    try:
-        users.remove('Start')
-    except Exception:
-        pass
-    users = [dict(index=i, data=users[i]) for i in range(0, len(users))]
-    data_transform = list(map(lambda x: [find_index(tasks, x[0]), find_index(users, x[1])], data))
-    unique = list(set(tuple(i) for i in data_transform))
-    unique = [list(i) for i in unique]
-    # [print(uni) for uni in users]
-    # building of a task-size profile of task execution per resource
-    profiles = build_profile(users, det_freq_matrix(unique, data_transform), len(tasks))
-    print('Analysing resource pool...')
-    #    sup.print_progress(((20 / 100)* 100),'Analysing resource pool ')
-    # building of a correlation matrix between resouces profiles
-    correlation_matrix = det_correlation_matrix(profiles)
-    #    sup.print_progress(((40 / 100)* 100),'Analysing resource pool ')
-    # creation of a relation network between resouces
-    g = nx.Graph()
-    for user in users:
-        g.add_node(user['index'])
-    for relation in correlation_matrix:
-        # creation of edges between nodes excluding the same element correlation
-        # and those below the 0.7 threshold of similarity
-        if relation['distance'] > sim_percentage and relation['x'] != relation['y']:
-            g.add_edge(relation['x'], relation['y'], weight=relation['distance'])
-    #    sup.print_progress(((60 / 100)* 100),'Analysing resource pool ')
-    # extraction of fully conected subgraphs as roles
-    sub_graphs = list(connected_component_subgraphs(g))
-    #    sup.print_progress(((80 / 100)* 100),'Analysing resource pool ')
-    # role definition from graph
-    roles = role_definition(sub_graphs, users)
-    # plot creation (optional)
-    if drawing == True:
-        graph_network(g, sub_graphs)
-    #    sup.print_progress(((100 / 100)* 100),'Analysing resource pool ')
-    return roles
+    if xes_const.DEFAULT_TRANSITION_KEY not in log_df.columns:  # "lifecycle:transition"
+        log_df[xes_const.DEFAULT_TRANSITION_KEY] = "complete"
+
+    # Construct rename mapping to fit the pm4py xes standards from the log parameters
+    xes_column_remap = {
+        log_parameter["case_id_key"]: "case:" + xes_const.DEFAULT_NAME_KEY,  # "case:concept:name"
+        log_parameter["activity_key"]: xes_const.DEFAULT_NAME_KEY,  # "concept:name"
+        log_parameter["timestamp_key"]: xes_const.DEFAULT_TIMESTAMP_KEY,  # "time:timestamp"
+        log_parameter["resource_key"]: "org:resource",
+    }
+    log_df.rename(xes_column_remap, axis=1, inplace=True)
+
+    return log_df
 
 
-def read_roles_from_columns(raw_data, filtered_data, separator):
-    records = list()
-    role_list = list()
-    pool_list = list()
-    raw_splited = list()
-    for row in raw_data:
-        temp = row.split(separator)
-        if temp[0] != 'End':
-            raw_splited.append(dict(role=temp[1], resource=temp[0]))
-    for row in filtered_data:
-        temp = row.split(separator)
-        if temp[0] != 'End':
-            pool_list.append(dict(role=temp[1], resource=temp[0]))
-            role_list.append(temp[1])
-    role_list = list(set(role_list))
-    for role in role_list:
-        members = list(filter(lambda person: person['role'] == role, pool_list))
-        members = list(map(lambda x: x['resource'], members))
-        quantity = len(members)
-        # freq = len(list(filter(lambda person: person['role'] == role, raw_splited)))
-        records.append(dict(role=role, quantity=quantity, members=members))
-    return records
+def create_xes_file(csv_path: Path, *, xes_path: Union[Path, str] = None, **log_parameter) -> Path:
+    """
+    Load a csv file, parse it to a xes file with pm4py so that it will contain all required columns,
+     then write the xes file next to the csv.
+    \n Adds 'lifecycle:transition' column if necessary.
+    \n Maps dataframe column names to the pm4py defaults.
+    :param csv_path: Path to a csv file of an event log.
+    :param xes_path: The path to save the xes file to. Defaults to csv_path with changed suffix.
+    :param log_parameter: Specifically mappings for names of certain column keys.
+    :return: The path of the xes file next to the
+    """
+    df = pd.read_csv(csv_path)
 
+    df = ensure_xes_standard_naming(df, log_parameter)
 
-def read_resource_pool(log, separator=None, drawing=False, sim_percentage=0.7):
-    if separator == None:
-        filtered_list = list()
-        for row in log.data:
-            if row['task'] != 'End' and row['user'] != 'AUTO':
-                filtered_list.append([row['task'], row['user']])
-        return role_discovery(filtered_list, drawing, sim_percentage)
-    else:
-        raw_list = list()
-        filtered_list = list()
-        for row in log.data:
-            raw_list.append(row['user'])
-        filtered_list = list(set(raw_list))
-        return read_roles_from_columns(raw_list, filtered_list, separator)
+    df = pm4py.format_dataframe(df)
+    event_log = pm4py.convert_to_event_log(df)
+    if not xes_path:
+        xes_path = csv_path.with_suffix(".xes")
+    pm4py.write_xes(event_log, str(xes_path))
+
+    return xes_path

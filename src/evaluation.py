@@ -1,6 +1,7 @@
 """
 Taken from the last notebook cell, allegedly specifically for next activity prediction
 """
+from typing import Tuple
 
 # -*- coding: utf-8 -*-
 ##### Reused existing code for post processing with modifications to get attention weights
@@ -12,14 +13,14 @@ Created on Fri Mar  8 08:16:15 2019
 import json
 import os
 import math
-import random
 
 from keras.models import load_model, Model
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-from util import create_csv_file, create_csv_file_header, plot_history
+from util import create_csv_file, create_csv_file_header, plot_history, get_parameter_path
+from nn_support import reduce_loops, add_calculated_features, create_index, vectorization
 
 MY_WORKSPACE_DIR = os.getenv("MY_WORKSPACE_DIR", "../")
 START_TIMEFORMAT = ''
@@ -31,13 +32,18 @@ EXP = dict()
 timeformat = '%Y-%m-%dT%H:%M:%S.%f'
 
 
-def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict, is_single_exec=True):
+def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict,
+                 *, start_timestamp_col: str = "time:timestamp", end_timestamp_col: str = "time:timestamp",
+                 no_loops: bool = False,
+                 is_single_exec=True) -> Tuple[pd.DataFrame,pd.DataFrame, pd.DataFrame]:
     """Main function of the suffix prediction module.
     Args:
         timeformat (str): event-log date-time format.
         parameters (dict): parameters used in the training step.
         is_single_exec (boolean): generate measurments stand alone or share
                     results with other runing experiments (optional)
+    :param start_timestamp_col:
+    :param end_timestamp_col:
     """
     global START_TIMEFORMAT
     global INDEX_AC
@@ -50,9 +56,10 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict, is_
 
     output_route = parameters['folder']
     model_name, _ = os.path.splitext(parameters['model_path'])
+    parameters_path = get_parameter_path(parameters['model_path'])
 
     # Loading of parameters from training
-    with open(os.path.join(output_route, 'parameters', parameters['log_name'] + 'model_parameters.json')) as file:
+    with open(parameters_path) as file:
         data = json.load(file)
         EXP = {k: v for k, v in data['exp_desc'].items()}
         print(EXP)
@@ -77,10 +84,24 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict, is_
     # y_train = np.argmax(train_vec['next_evt']['y_ac_inp'], axis=1)
     # x_train=ac_input
 
+    # Parameters
+    log_parameters = parameters["log_parameters"]
+    case_id_key = log_parameters["case_id_key"]
+    activity_key = log_parameters["activity_key"]
+    timestamp_key = log_parameters["timestamp_key"]
+    resource_key = log_parameters["resource_key"]
+
     # Loading of testing dataframe
     df_test = dataframe
     df_test['start_timestamp'] = pd.to_datetime(df_test['start_timestamp'])
     df_test['end_timestamp'] = pd.to_datetime(df_test['end_timestamp'])
+
+    # Preprocess
+    if no_loops:
+        df_test = reduce_loops(df_test)
+    ac_index = parameters['ac_index']
+    rl_index = parameters['rl_index']
+    df_test = add_calculated_features(df_test, ac_index, rl_index)
     df_test = df_test.drop(columns=['user'])
     df_test = df_test.rename(index=str, columns={"role": "user"})
 
@@ -97,14 +118,12 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict, is_
         norm = lambda x: (x['tbtw_log'] - mean_tbtw) / std_tbtw
         df_test['tbtw_norm'] = df_test.apply(norm, axis=1)
 
-    print(INDEX_AC)
-
     #   Next event selection method and numbers of repetitions
     variants = [{'imp': 'Arg Max', 'rep': 1}]  # ,
     # {'imp': 'Random Choice', 'rep': 1}]
     #   Generation of predictions
     has_time = False
-    model = load_model(os.path.join(output_route, parameters['model_file']))
+    model = load_model(os.path.join(output_route, parameters['model_path']))
     layer_names = [layer.name for layer in model.layers]
     print(layer_names)
     rl_emb_weights = None
@@ -128,33 +147,32 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict, is_
     temporal_vectors = []
     for var in variants:
         measurements = list()
-        for i in range(0, 1):
-            print(var['imp'])
-            prefixes = create_pref_suf(df_test)
-            # if temporal attention True, else False
+        print(var['imp'])
+        prefixes = create_pref_suf(df_test)
+        # if temporal attention True, else False
 
-            prefixes, temporal_vectors, variable_vectors = predict_next_in(model_with_attention, ac_emb_weights,
-                                                                           rl_emb_weights, ac_output_weights, has_time,
-                                                                           prefixes, var['imp'], prefix_only)
+        prefixes, temporal_vectors, variable_vectors = predict_next_in(model_with_attention, ac_emb_weights,
+                                                                       rl_emb_weights, ac_output_weights, has_time,
+                                                                       prefixes, var['imp'], prefix_only)
 
-            accuracy = (np.sum([x['ac_true'] for x in prefixes]) / len(prefixes))
-            print(accuracy)
-            y_pred = [x['ac_pred'] for x in prefixes]
-            y_true = [x['ac_next'] for x in prefixes]
+        accuracy = (np.sum([x['ac_true'] for x in prefixes]) / len(prefixes))
+        print("accuracy:" + str(accuracy))
+        y_pred = [x['ac_pred'] for x in prefixes]
+        y_true = [x['ac_next'] for x in prefixes]
 
-            from sklearn.metrics import classification_report
-            print(classification_report(y_true, y_pred))
+        from sklearn.metrics import classification_report
+        print(classification_report(y_true, y_pred))
 
-            file_name = 'results/' + parameters['log_name'] + 'next_event_measures.csv'
-            # Save results
-            measurements.append({**dict(model=os.path.join(output_route, file_name),
-                                        implementation=var['imp']), **{'accuracy': accuracy},
-                                 **EXP})
-            if measurements:
-                if os.path.exists(os.path.join(output_route, file_name)):
-                    create_csv_file(measurements, os.path.join(output_route, file_name), mode='a')
-                else:
-                    create_csv_file_header(measurements, os.path.join(output_route, file_name))
+        file_name = 'results/' + parameters['log_name'] + 'next_event_measures.csv'
+        # Save results
+        measurements.append({**dict(model=os.path.join(output_route, file_name),
+                                    implementation=var['imp']), **{'accuracy': accuracy},
+                             **EXP})
+        if measurements:
+            if os.path.exists(os.path.join(output_route, file_name)):
+                create_csv_file(measurements, os.path.join(output_route, file_name), mode='a')
+            else:
+                create_csv_file_header(measurements, os.path.join(output_route, file_name))
 
     # print(attention_vector_final)
     file_name = parameters['log_name'] + str(DIM['time_dim'])
@@ -171,7 +189,6 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict, is_
 
         ac_labels = [INDEX_AC[key] for key in sorted(INDEX_AC.keys())]
         rl_labels = [INDEX_RL[key] for key in sorted(INDEX_RL.keys())]
-        print(ac_labels)
 
         num_dim = var_final.shape[0]
         print(num_dim)
@@ -181,14 +198,36 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict, is_
         if (num_dim == len(ac_labels) + 1):
             ac_labels.append('time')
 
-        df_var = pd.DataFrame({'attributes': var_final, 'attribute_values': ac_labels})
-        # print(df_var)
+        df_var = pd.DataFrame({'attribute_values': ac_labels, 'attributes': var_final})
         df_var.plot.bar(y='attributes', x='attribute_values',
                         title='Attention of the event attributes.', figsize=(10, 5))
 
         plot_history(plt, file_name + 'variable_attn', path)
 
         plt.show()
+
+        # map for proper naming of returned dataframe
+        df_global_attribute_attention = df_var.rename(
+            {"attributes": "attention", "attribute_values": "attributes"}).set_index("attributes")
+
+        df_local_attribute_attention = pd.DataFrame(variable_vectors, columns=ac_labels)
+
+        prefix_df = pd.DataFrame.from_records(prefixes).rename({
+            "ac_pref": "Prefix", "ac_next": "Next Activity - Ground Truth", "ac_pred": "Next Activity - Prediction",
+            "ac_true": "Correct Prediction", "rl_pref": "Role Prefix", "rl_next": "Next Role",
+            "t_pref": "Time Between Prefix",
+        }, axis=1)
+        # Get the first occurrence of each case id
+        first_event_per_case_indices = df_test.groupby("caseid").head(1).index
+        case_ids = df_test.drop(first_event_per_case_indices, axis=0)["caseid"]
+        # Add case ids to prefix_df
+        prefix_df.insert(0, "Case ID", case_ids.values)
+        # Reorder columns
+        prefix_df = prefix_df.filter(["Case ID", "Prefix", "Next Activity - Ground Truth",
+                                      "Next Activity - Prediction", "Correct Prediction", "Role Prefix", "Next Role",
+                                      "Time Between Prefix"])
+
+        return df_global_attribute_attention, df_local_attribute_attention, prefix_df,
 
         # var_local = np.array(variable_vectors[2919])
         # df_var_local=pd.DataFrame({'attributes':var_local, 'attribute_values':ac_labels})
@@ -202,11 +241,10 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict, is_
         #                                                                  title='Attention of '
         #                                                                         ' index')
         # plt.show()
-        return model
 
 
 # =============================================================================
-# Predic traces
+# Predict traces
 # =============================================================================
 
 def predict_next_in(model_attn, ac_emb_weights, rl_emb_weights, ac_output_weights, has_time, prefixes, imp,
