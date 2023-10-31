@@ -35,7 +35,7 @@ timeformat = '%Y-%m-%dT%H:%M:%S.%f'
 def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict,
                  *, start_timestamp_col: str = "time:timestamp", end_timestamp_col: str = "time:timestamp",
                  no_loops: bool = False,
-                 is_single_exec=True) -> Tuple[pd.DataFrame,pd.DataFrame, pd.DataFrame]:
+                 is_single_exec=True) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Main function of the suffix prediction module.
     Args:
         timeformat (str): event-log date-time format.
@@ -89,7 +89,7 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict,
     case_id_key = log_parameters["case_id_key"]
     activity_key = log_parameters["activity_key"]
     timestamp_key = log_parameters["timestamp_key"]
-    resource_key = log_parameters["resource_key"]
+    #resource_key = log_parameters["resource_key"]
 
     # Loading of testing dataframe
     df_test = dataframe
@@ -181,9 +181,12 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict,
     pd.DataFrame(temp_final, columns=['alpha attention weight']).plot(kind='bar',
                                                                       title='Attention of '
                                                                             ' index')
-
     plot_history(plt, file_name + 'prefix_attn', path)
     plt.show()
+
+    temporal_attention_df = pd.DataFrame(temporal_vectors)
+
+    df_global_attribute_attention = df_local_attribute_attention = None
     if (len(variable_vectors) > 0):
         var_final = np.mean(np.array(variable_vectors), axis=0)
 
@@ -212,22 +215,22 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict,
 
         df_local_attribute_attention = pd.DataFrame(variable_vectors, columns=ac_labels)
 
-        prefix_df = pd.DataFrame.from_records(prefixes).rename({
-            "ac_pref": "Prefix", "ac_next": "Next Activity - Ground Truth", "ac_pred": "Next Activity - Prediction",
-            "ac_true": "Correct Prediction", "rl_pref": "Role Prefix", "rl_next": "Next Role",
-            "t_pref": "Time Between Prefix",
-        }, axis=1)
-        # Get the first occurrence of each case id
-        first_event_per_case_indices = df_test.groupby("caseid").head(1).index
-        case_ids = df_test.drop(first_event_per_case_indices, axis=0)["caseid"]
-        # Add case ids to prefix_df
-        prefix_df.insert(0, "Case ID", case_ids.values)
-        # Reorder columns
-        prefix_df = prefix_df.filter(["Case ID", "Prefix", "Next Activity - Ground Truth",
-                                      "Next Activity - Prediction", "Correct Prediction", "Role Prefix", "Next Role",
-                                      "Time Between Prefix"])
+    prefix_df = pd.DataFrame.from_records(prefixes).rename({
+        "ac_pref": "Prefix", "ac_next": "Next Activity - Ground Truth", "ac_pred": "Next Activity - Prediction",
+        "ac_true": "Correct Prediction", "rl_pref": "Role Prefix", "rl_next": "Next Role",
+        "t_pref": "Time Between Prefix",
+    }, axis=1)
+    # Get the first occurrence of each case id
+    first_event_per_case_indices = df_test.groupby("caseid").head(1).index
+    case_ids = df_test.drop(first_event_per_case_indices, axis=0)["caseid"]
+    # Add case ids to prefix_df
+    prefix_df.insert(0, "Case ID", case_ids.values)
+    # Reorder columns
+    prefix_df = prefix_df.filter(["Case ID", "Prefix", "Next Activity - Ground Truth",
+                                  "Next Activity - Prediction", "Correct Prediction", "Role Prefix", "Next Role",
+                                  "Time Between Prefix"])
 
-        return df_global_attribute_attention, df_local_attribute_attention, prefix_df,
+    return temporal_attention_df, df_global_attribute_attention, df_local_attribute_attention, prefix_df,
 
         # var_local = np.array(variable_vectors[2919])
         # df_var_local=pd.DataFrame({'attributes':var_local, 'attribute_values':ac_labels})
@@ -348,8 +351,8 @@ def predict_next_in(model_attn, ac_emb_weights, rl_emb_weights, ac_output_weight
         # Activities accuracy evaluation
         if pos == prefix['ac_next']:
             prefix['ac_true'] = 1
-            if (idx < 4):
-                print('value is ', len(variable_vectors))
+            #if (idx < 4):
+            #    print('value is ', len(variable_vectors))
         else:
             prefix['ac_true'] = 0
         # x_test_neg = np.append(x_test_neg,x_ac_ngram, axis=0)

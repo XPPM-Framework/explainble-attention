@@ -17,7 +17,7 @@ from util import create_json, get_parameter_path, get_results_path
 import typer
 from typing_extensions import Annotated
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_enable=False)
 
 MY_WORKSPACE_DIR = os.getenv("MY_WORKSPACE_DIR", "../")
 if not MY_WORKSPACE_DIR:
@@ -38,7 +38,7 @@ default_parameters = {
     'dense_act': None,  # optimization function see keras doc
     'optim': 'Adagrad',  # optimization function see keras doc
     'norm_method': 'lognorm',  # max, lognorm
-    'n_size': 15,  # n-gram size
+    'n_size': 5,  # n-gram size
     'model_type': 'shared_cat',  # Model types --> specialized, concatenated, shared_cat, joint, shared
     'l_size': 50,  # LSTM layer sizes
 }
@@ -135,7 +135,7 @@ def explain(dataset_path: Path, model_path: Path,
     role_mapping = final_parameters["role_mapping"]
     log_df = add_resource_roles(log_df, role_mapping)
 
-    global_attentions, local_attentions, prefix_df = predict_next(log_df, timeformat, final_parameters)
+    temporal_attentions, global_attentions, local_attentions, prefix_df = predict_next(log_df, timeformat, final_parameters)
 
     activity_columns = ["Prefix", "Next Activity - Ground Truth", "Next Activity - Prediction"]
     prefix_df = revert_activity_index_mappings(prefix_df, activity_columns, final_parameters["index_ac"])
@@ -143,8 +143,9 @@ def explain(dataset_path: Path, model_path: Path,
     results_path = get_results_path(model_path)
     results_path.mkdir(parents=True, exist_ok=True)
 
-    global_attentions.to_csv(results_path / f"global_attentions.csv", index=True)
-    local_attentions.to_csv(results_path / f"local_attentions.csv", index=False)
+    temporal_attentions.to_csv(results_path / f"temporal_attentions.csv", index=False)
+    global_attentions.to_csv(results_path / f"global_attentions.csv", index=True) if global_attentions is not None else None
+    local_attentions.to_csv(results_path / f"local_attentions.csv", index=False) if local_attentions is not None else None
     prefix_df.to_csv(results_path / f"prefixes.csv", index=False)
 
     return global_attentions, local_attentions, prefix_df

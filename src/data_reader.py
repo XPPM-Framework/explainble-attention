@@ -414,13 +414,17 @@ def ensure_xes_standard_naming(log_df: pd.DataFrame, log_parameter) -> pd.DataFr
     if xes_const.DEFAULT_TRANSITION_KEY not in log_df.columns:  # "lifecycle:transition"
         log_df[xes_const.DEFAULT_TRANSITION_KEY] = "complete"
 
+    print(log_parameter)
+
     # Construct rename mapping to fit the pm4py xes standards from the log parameters
     xes_column_remap = {
         log_parameter["case_id_key"]: "case:" + xes_const.DEFAULT_NAME_KEY,  # "case:concept:name"
         log_parameter["activity_key"]: xes_const.DEFAULT_NAME_KEY,  # "concept:name"
         log_parameter["timestamp_key"]: xes_const.DEFAULT_TIMESTAMP_KEY,  # "time:timestamp"
-        log_parameter["resource_key"]: "org:resource",
     }
+    if "resource_key" in log_parameter:
+        xes_column_remap[log_parameter["resource_key"]] = "org:resource"
+
     log_df.rename(xes_column_remap, axis=1, inplace=True)
 
     return log_df
@@ -438,6 +442,7 @@ def create_xes_file(csv_path: Path, *, xes_path: Union[Path, str] = None, **log_
     :return: The path of the xes file next to the
     """
     df = pd.read_csv(csv_path)
+    print(log_parameter)
 
     df = ensure_xes_standard_naming(df, log_parameter)
 
