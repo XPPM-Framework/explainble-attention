@@ -120,9 +120,9 @@ class LogReader(object):
                     if date.attrib['key'] == 'time:timestamp':
                         timestamp = date.attrib['value']
                         try:
-                            timestamp = datetime.datetime.strptime(timestamp[:-6], start_timeformat)
+                            timestamp = datetime.datetime.fromisoformat(timestamp[:-6])
                         except ValueError:
-                            timestamp = datetime.datetime.strptime(timestamp, start_timeformat)
+                            timestamp = datetime.datetime.fromisoformat(timestamp)
                 if not (task == '0' or task == '-1'):
                     temp_data.append(
                         dict(caseid=caseid, task=task, event_type=event_type, user=user, start_timestamp=timestamp,
@@ -447,6 +447,9 @@ def create_xes_file(csv_path: Path, *, xes_path: Union[Path, str] = None, **log_
     df = ensure_xes_standard_naming(df, log_parameter)
 
     df = pm4py.format_dataframe(df)
+
+    df['time:timestamp'] = df['time:timestamp'].apply(lambda x: datetime.datetime.strptime(x, "%Y/%m/%d %H:%M:%S.%f") if isinstance(x, str) else x)
+
     event_log = pm4py.convert_to_event_log(df)
     if not xes_path:
         xes_path = csv_path.with_suffix(".xes")

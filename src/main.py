@@ -116,7 +116,7 @@ def explain(dataset_path: Path, model_path: Path,
     # Set 'model_file'
     final_parameters['model_path'] = str(model_path)
 
-    timeformat = final_parameters["timeformat"]
+    timeformat = final_parameters["log_parameters"]["timeformat"]
 
     if dataset_path.suffix == ".gz":
         xes_path = dataset_path
