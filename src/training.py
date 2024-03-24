@@ -62,6 +62,9 @@ def training_model(log_df: pd.DataFrame, args: dict, *, no_loops: bool = False):
                              features=str(len(index_ac.items())))
     parameters['mean_tbtw'] = vec['mean_tbtw']
     parameters['std_tbtw'] = vec['std_tbtw']
+    parameters['incl_time'] = args.get('incl_time', True)
+    parameters['incl_res'] = args.get('incl_res', True)
+    parameters['perform_role_mining'] = args.get('perform_role_mining', True)
 
     create_json(parameters, get_parameter_path(model_path=args['model_path']))
 
@@ -93,7 +96,11 @@ def training_model_temporal(vec, ac_weights, rl_weights, output_folder, args):
     dropout_context = 0.15
     # number of lstm cells
     incl_time = True
+    if incl_time:
+        print("Using time component")
     incl_res = True
+    if incl_res:
+        print("Using resource component")
     lstm_size_alpha = args['l_size']
     print("Training prefix-attention model")
 

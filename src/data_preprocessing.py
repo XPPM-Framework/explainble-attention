@@ -11,8 +11,9 @@ from data_reader import LogReader, find_index, build_profile, det_freq_matrix, \
 from nn_support import reduce_loops, add_calculated_features, create_index, vectorization
 
 
-def preprocess_dataframe(log_df: pd.DataFrame, *, no_loops: bool, norm_method: str, n_size: int, **kwargs)\
-        -> Tuple[dict, dict, dict, np.ndarray, np.ndarray]:
+def preprocess_dataframe(log_df: pd.DataFrame, *,
+                         no_loops: bool, norm_method: str, n_size: int,
+                         **kwargs) -> Tuple[dict, dict, dict, np.ndarray, np.ndarray]:
     """
     Prepares the dataset by adding additional features and vectorizing it
     :param log_df: The dataframe to preprocess.
@@ -53,16 +54,23 @@ def preprocess_dataframe(log_df: pd.DataFrame, *, no_loops: bool, norm_method: s
     return vec, index_ac, index_rl, ac_weights, rl_weights
 
 
-def create_resource_roles(log: LogReader) -> Tuple[pd.DataFrame, Dict[str, str]]:
+def create_resource_roles(log: LogReader, *, perform_role_mining: bool = True) -> Tuple[pd.DataFrame, Dict[str, str]]:
     """
     Discovers and adds resource roles (groups) to each row in the event log. Also gives a mapping of from resource to role.
     :param log:
+    :param perform_role_mining: Whether to actually perform role mining or just provide a resource mapping.
     :return:
     """
     _, resource_table = read_resource_pool(log, sim_percentage=0.50)
     # Role discovery
     log_df_resources = pd.DataFrame.from_records(resource_table)
     log_df_resources = log_df_resources.rename(index=str, columns={"resource": "user"})
+
+    # Hacky way to not propagate the done role mining while affecting the rest of the workflow as little as possible
+    if not perform_role_mining:
+        log_df_resources["role"] = log_df_resources.loc[:, "user"]
+        print("**Not** performing role mining")
+
     # Dataframe creation
     log_df = pd.DataFrame.from_records(log.data)
     log_df = log_df.merge(log_df_resources, on='user', how='left')
@@ -76,7 +84,8 @@ def create_resource_roles(log: LogReader) -> Tuple[pd.DataFrame, Dict[str, str]]
     return log_df, role_mapping
 
 
-def add_resource_roles(log_df: pd.DataFrame, role_mapping: Dict[str, str], *, resource_column: str = "user") -> pd.DataFrame:
+def add_resource_roles(log_df: pd.DataFrame, role_mapping: Dict[str, str], *,
+                       resource_column: str = "user") -> pd.DataFrame:
     """
     Add the 'role' column based on the resource ('user' column) and the given role mapping.
     :param log_df: The dataframe to add the 'role' columns to.
@@ -182,6 +191,7 @@ def revert_activity_index_mappings(df: pd.DataFrame, activity_columns: List[str]
     :param index_mapping: The mapping of index to activity name.
     :return:
     """
+
     def map_value_or_list(x: Any, mapping: dict):
         if isinstance(x, list):
             return [mapping[str(v)] for v in x]

@@ -84,7 +84,7 @@ def train(dataset_path: Path, model_path: Path,
 
     log = LogReader(str(xes_path), timeformat, timeformat, one_timestamp=True)
 
-    log_df, role_mapping = create_resource_roles(log)
+    log_df, role_mapping = create_resource_roles(log, perform_role_mining=final_parameters.get("perform_role_mining", True))
     # Add role mapping to parameters, so they are made persisted by the train method
     final_parameters["role_mapping"] = role_mapping
     model_path.parent.mkdir(parents=True, exist_ok=True)
