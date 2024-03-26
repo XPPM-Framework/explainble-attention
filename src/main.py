@@ -143,6 +143,8 @@ def explain(dataset_path: Path, model_path: Path,
     results_path = get_results_path(model_path)
     results_path.mkdir(parents=True, exist_ok=True)
 
+    print(f"Writing results to {results_path}")
+
     temporal_attentions.to_csv(results_path / f"temporal_attentions.csv", index=False)
     global_attentions.to_csv(results_path / f"global_attentions.csv", index=True) if global_attentions is not None else None
     local_attentions.to_csv(results_path / f"local_attentions.csv", index=False) if local_attentions is not None else None
