@@ -448,7 +448,11 @@ def create_xes_file(csv_path: Path, *, xes_path: Union[Path, str] = None, **log_
 
     df = pm4py.format_dataframe(df)
 
-    df['time:timestamp'] = df['time:timestamp'].apply(lambda x: datetime.datetime.strptime(x, "%Y/%m/%d %H:%M:%S.%f") if isinstance(x, str) else x)
+    try:
+        df['time:timestamp'] = df['time:timestamp'].apply(lambda x: datetime.datetime.strptime(x, "%Y/%m/%d %H:%M:%S.%f") if isinstance(x, str) else x)
+    except ValueError as e:
+        df['time:timestamp'] = df['time:timestamp'].apply(lambda x: datetime.datetime.fromisoformat(x) if isinstance(x, str) else x)
+
 
     event_log = pm4py.convert_to_event_log(df)
     if not xes_path:
