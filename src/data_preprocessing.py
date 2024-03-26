@@ -65,10 +65,13 @@ def create_resource_roles(log: LogReader, *, perform_role_mining: bool = True) -
     # Role discovery
     log_df_resources = pd.DataFrame.from_records(resource_table)
     log_df_resources = log_df_resources.rename(index=str, columns={"resource": "user"})
+    role_mapping: Dict[str, str] = {resource: role for role, resource in map(lambda x: x.values(), resource_table)}
 
     # Hacky way to not propagate the done role mining while affecting the rest of the workflow as little as possible
     if not perform_role_mining:
+        # Override with identity mapping for each resource
         log_df_resources["role"] = log_df_resources.loc[:, "user"]
+        role_mapping: Dict[str, str] = {resource: resource for role, resource in map(lambda x: x.values(), resource_table)}
         print("**Not** performing role mining")
 
     # Dataframe creation
@@ -79,7 +82,6 @@ def create_resource_roles(log: LogReader, *, perform_role_mining: bool = True) -
     log_df = log_df.reset_index(drop=True)
 
     # Create pickleable mapping from resource to role
-    role_mapping: Dict[str, str] = {resource: role for role, resource in map(lambda x: x.values(), resource_table)}
 
     return log_df, role_mapping
 
