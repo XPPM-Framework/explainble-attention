@@ -224,9 +224,10 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict,
     first_event_per_case_indices = df_test.groupby("caseid").head(1).index
     case_ids = df_test.drop(first_event_per_case_indices, axis=0)["caseid"]
     # Add case ids to prefix_df
-    prefix_df.insert(0, "Case ID", case_ids.values)
+    case_id_key = parameters["log_parameters"]["case_id_key"]
+    prefix_df.insert(0, case_id_key, case_ids.values)
     # Reorder columns
-    prefix_df = prefix_df.filter(["Case ID", "Prefix", "Next Activity - Ground Truth",
+    prefix_df = prefix_df.filter([case_id_key, "Prefix", "Next Activity - Ground Truth",
                                   "Next Activity - Prediction", "Correct Prediction", "Role Prefix", "Next Role",
                                   "Time Between Prefix"])
 
