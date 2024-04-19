@@ -19,3 +19,5 @@ dependencies:
   - jellyfish=1.0.0
   - platformdirs=3.10.0
   - typer=0.9.0
+  - pip:
+    - pm4py==2.7.5

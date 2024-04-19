@@ -116,12 +116,12 @@ def explain(dataset_path: Path, model_path: Path,
     # Set 'model_file'
     final_parameters['model_path'] = str(model_path)
 
-    timeformat = final_parameters["log_parameters"]["timeformat"]
+    log_params = final_parameters["log_parameters"]
+    timeformat = log_params["timeformat"]
 
     if dataset_path.suffix == ".gz":
         xes_path = dataset_path
     elif dataset_path.suffix == ".csv":
-        log_params = final_parameters["log_parameters"]
         xes_path = create_xes_file(dataset_path, **log_params)
     else:
         raise Exception("Only supports zipped xes and csv files")
