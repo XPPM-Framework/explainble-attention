@@ -1,4 +1,4 @@
-# Sinhghatta2020
+# Sindhgatta2020
 
 ## Usage
 
