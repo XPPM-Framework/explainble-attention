@@ -87,7 +87,7 @@ def create_csv_file_header(index, output_file, mode='w'):
 
 def create_json(dictionary, output_file):
     with open(output_file, 'w') as f:
-        f.write(json.dumps(dictionary))
+        f.write(json.dumps(dictionary, indent=4))
 
 
 def read_json(file_path: Union[Path, str]) -> dict:
