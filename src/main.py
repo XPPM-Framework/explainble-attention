@@ -138,7 +138,7 @@ def explain(dataset_path: Path, model_path: Path,
     temporal_attentions, global_attentions, local_attentions, prefix_df = predict_next(log_df, timeformat, final_parameters)
 
     activity_columns = ["Prefix", "Next Activity - Ground Truth", "Next Activity - Prediction"]
-    prefix_df = revert_activity_index_mappings(prefix_df, activity_columns, final_parameters["index_ac"])
+    prefix_df_reverted = revert_activity_index_mappings(prefix_df, activity_columns, final_parameters["index_ac"])
 
     results_path = get_results_path(model_path)
     results_path.mkdir(parents=True, exist_ok=True)
@@ -148,9 +148,9 @@ def explain(dataset_path: Path, model_path: Path,
     temporal_attentions.to_csv(results_path / f"temporal_attentions.csv", index=False)
     global_attentions.to_csv(results_path / f"global_attentions.csv", index=True) if global_attentions is not None else None
     local_attentions.to_csv(results_path / f"local_attentions.csv", index=False) if local_attentions is not None else None
-    prefix_df.to_csv(results_path / f"prefixes.csv", index=False)
+    prefix_df_reverted.to_csv(results_path / f"prefixes.csv", index=False)
 
-    return global_attentions, local_attentions, prefix_df
+    return global_attentions, local_attentions, prefix_df_reverted
 
 
 @app.command()
