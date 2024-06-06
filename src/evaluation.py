@@ -216,6 +216,7 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict,
         df_local_attribute_attention = pd.DataFrame(variable_vectors, columns=ac_labels)
 
     prefix_df = pd.DataFrame.from_records(prefixes).rename({
+        "ac": activity_key,
         "ac_pref": "Prefix", "ac_next": "Next Activity - Ground Truth", "ac_pred": "Next Activity - Prediction",
         "ac_true": "Correct Prediction", "rl_pref": "Role Prefix", "rl_next": "Next Role",
         "t_pref": "Time Between Prefix",
@@ -227,7 +228,7 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict,
     case_id_key = parameters["log_parameters"]["case_id_key"]
     prefix_df.insert(0, case_id_key, case_ids.values)
     # Reorder columns
-    prefix_df = prefix_df.filter([case_id_key, "Prefix", "Next Activity - Ground Truth",
+    prefix_df = prefix_df.filter([case_id_key, activity_key, "Prefix", "Next Activity - Ground Truth",
                                   "Next Activity - Prediction", "Correct Prediction", "Role Prefix", "Next Role",
                                   "Time Between Prefix"])
 
@@ -387,10 +388,12 @@ def create_pref_suf(df_test):
         rl_pref = list()
         t_pref = list()
         for i in range(0, len(trace) - 1):
+            ac = trace.iloc[i]['ac_index']
             ac_pref.append(trace.iloc[i]['ac_index'])
             rl_pref.append(trace.iloc[i]['rl_index'])
             t_pref.append(trace.iloc[i]['tbtw_norm'])
-            prefixes.append(dict(ac_pref=ac_pref.copy(),
+            prefixes.append(dict(ac=ac,
+                                 ac_pref=ac_pref.copy(),
                                  ac_next=trace.iloc[i + 1]['ac_index'],
                                  rl_pref=rl_pref.copy(),
                                  rl_next=trace.iloc[i + 1]['rl_index'],

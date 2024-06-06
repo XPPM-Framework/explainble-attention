@@ -95,10 +95,10 @@ def training_model_temporal(vec, ac_weights, rl_weights, output_folder, args):
     dropout_input = 0.15
     dropout_context = 0.15
     # number of lstm cells
-    incl_time = True
+    incl_time = args.get("incl_time", True)
     if incl_time:
         print("Using time component")
-    incl_res = True
+    incl_res = args.get("incl_res", True)
     if incl_res:
         print("Using resource component")
     lstm_size_alpha = args['l_size']
@@ -228,8 +228,12 @@ def training_model_temporal_variable(vec, ac_weights, rl_weights, output_folder,
 
     l2reg=0.0001
     allow_negative=False
-    incl_time = True
-    incl_res = True
+    incl_time = args.get("incl_time", True)
+    if incl_time:
+        print("Using time component")
+    incl_res = args.get("incl_res", True)
+    if incl_res:
+        print("Using resource component")
     #Code Input
     ac_input = Input(shape=(vec['prefixes']['x_ac_inp'].shape[1], ), name='ac_input')
     rl_input = Input(shape=(vec['prefixes']['x_rl_inp'].shape[1], ), name='rl_input')

@@ -137,7 +137,11 @@ def explain(dataset_path: Path, model_path: Path,
 
     temporal_attentions, global_attentions, local_attentions, prefix_df = predict_next(log_df, timeformat, final_parameters)
 
-    activity_columns = ["Prefix", "Next Activity - Ground Truth", "Next Activity - Prediction"]
+    log_parameters = parameters["log_parameters"]
+    case_id_key = log_parameters["case_id_key"]
+    activity_key = log_parameters["activity_key"]
+
+    activity_columns = [activity_key, "Prefix", "Next Activity - Ground Truth", "Next Activity - Prediction"]
     prefix_df_reverted = revert_activity_index_mappings(prefix_df, activity_columns, final_parameters["index_ac"])
 
     results_path = get_results_path(model_path)
