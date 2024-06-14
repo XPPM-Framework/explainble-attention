@@ -148,7 +148,7 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict,
     for var in variants:
         measurements = list()
         print(var['imp'])
-        prefixes = create_pref_suf(df_test)
+        prefixes = create_pref_suf(df_test, ac_index, rl_index)
         # if temporal attention True, else False
 
         prefixes, temporal_vectors, variable_vectors = predict_next_in(model_with_attention, ac_emb_weights,
@@ -223,7 +223,8 @@ def predict_next(dataframe: pd.DataFrame, timeformat: str, parameters: dict,
     }, axis=1)
     # Get the first occurrence of each case id
     first_event_per_case_indices = df_test.groupby("caseid").head(1).index
-    case_ids = df_test.drop(first_event_per_case_indices, axis=0)["caseid"]
+    # case_ids = df_test.drop(first_event_per_case_indices, axis=0)["caseid"]
+    case_ids = df_test["caseid"]
     # Add case ids to prefix_df
     case_id_key = parameters["log_parameters"]["case_id_key"]
     prefix_df.insert(0, case_id_key, case_ids.values)
@@ -370,7 +371,7 @@ def predict_next_in(model_attn, ac_emb_weights, rl_emb_weights, ac_output_weight
 # =============================================================================
 # Reformat
 # =============================================================================
-def create_pref_suf(df_test):
+def create_pref_suf(df_test: pd.DataFrame, ac_index, rl_index):
     """Extraction of prefixes and expected suffixes from event log.
     Args:
         df_test (dataframe): testing dataframe in pandas format.
@@ -387,16 +388,16 @@ def create_pref_suf(df_test):
         ac_pref = list()
         rl_pref = list()
         t_pref = list()
-        for i in range(0, len(trace) - 1):
+        for i in range(0, len(trace)):
             ac = trace.iloc[i]['ac_index']
             ac_pref.append(trace.iloc[i]['ac_index'])
             rl_pref.append(trace.iloc[i]['rl_index'])
             t_pref.append(trace.iloc[i]['tbtw_norm'])
             prefixes.append(dict(ac=ac,
                                  ac_pref=ac_pref.copy(),
-                                 ac_next=trace.iloc[i + 1]['ac_index'],
+                                 ac_next=trace.iloc[i + 1]['ac_index'] if i + 1 < len(trace) else ac_index["end"],
                                  rl_pref=rl_pref.copy(),
-                                 rl_next=trace.iloc[i + 1]['rl_index'],
+                                 rl_next=trace.iloc[i + 1]['rl_index'] if i + 1 < len(trace) else rl_index["end"],
                                  t_pref=t_pref.copy()))
     return prefixes
 
